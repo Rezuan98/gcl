@@ -7,7 +7,8 @@ use Illuminate\Support\Facades\Http;
 
 class SmsService
 {
-    private const MIMSMS_API_URL = 'https://smsplus.sslwireless.com/api/v3/send-sms';
+    // CORRECT API ENDPOINT
+    private const MIMSMS_API_URL = 'https://api.mimsms.com/api/SmsSending/SMS';
     
     public function sendOtp(string $phone, string $otp): bool
     {
@@ -24,35 +25,45 @@ class SmsService
     public function sendMimSms(string $phone, string $message): bool
     {
         try {
-            $apiToken = config('services.mimsms.api_key');
-            $sid = config('services.mimsms.sender_name', 'GCL');
+            // Get credentials - note: we need USERNAME not just API key
+            $username = config('services.mimsms.username');
+            $apiKey = config('services.mimsms.api_key');
+            $senderName = config('services.mimsms.sender_name', '8809601004835');
 
-            if (!$apiToken) {
-                Log::error('MiMSMS API Key is missing');
-                throw new \Exception('MiMSMS API Key is missing.');
+            if (!$username || !$apiKey) {
+                Log::error('MiMSMS credentials missing');
+                throw new \Exception('MiMSMS credentials missing.');
             }
 
             $formattedPhone = $this->formatPhoneNumberForBangladesh($phone);
 
-            Log::info('Sending SMS via MiMSMS', [
+            Log::info('🚀 Sending SMS via MiMSMS (CORRECT API)', [
                 'phone' => $formattedPhone,
-                'sender' => $sid
+                'sender' => $senderName
             ]);
 
+            // CORRECT PAYLOAD FORMAT (JSON)
             $payload = [
-                'api_token' => $apiToken,
-                'sid' => $sid,
-                'sms' => $message,
-                'msisdn' => $formattedPhone,
-                'csms_id' => uniqid('gcl_', true),
+                'UserName' => $username,
+                'Apikey' => $apiKey,
+                'SenderName' => $senderName,
+                'Message' => $message,
+                'MobileNumber' => $formattedPhone,
+                'TransactionType' => 'T', // T = Transactional (for OTP)
             ];
 
+            // Send as JSON (not form data!)
             $response = Http::withOptions([
-                CURLOPT_IPRESOLVE => CURL_IPRESOLVE_V4,
+                CURLOPT_IPRESOLVE => CURL_IPRESOLVE_V4, // Force IPv4
                 CURLOPT_TIMEOUT => 30,
-            ])->asForm()->post(self::MIMSMS_API_URL, $payload);
+            ])
+            ->withHeaders([
+                'Content-Type' => 'application/json',
+                'Accept' => 'application/json',
+            ])
+            ->post(self::MIMSMS_API_URL, $payload);
 
-            Log::info('MiMSMS Response', [
+            Log::info('📡 MiMSMS Response', [
                 'status' => $response->status(),
                 'body' => $response->body()
             ]);
@@ -60,16 +71,20 @@ class SmsService
             if ($response->successful()) {
                 $result = $response->json();
                 
+                // Check for success (statusCode: "200" and status: "Success")
                 if (
-                    (isset($result['status']) && strtoupper($result['status']) === 'SUCCESS') ||
-                    (isset($result['status_code']) && in_array($result['status_code'], [200, '200']))
+                    (isset($result['statusCode']) && $result['statusCode'] === '200') &&
+                    (isset($result['status']) && strtolower($result['status']) === 'success')
                 ) {
-                    Log::info("✅ SMS sent successfully", ['phone' => $formattedPhone]);
+                    Log::info("✅ SMS SENT SUCCESSFULLY!", [
+                        'phone' => $formattedPhone,
+                        'trxnId' => $result['trxnId'] ?? 'N/A'
+                    ]);
                     return true;
                 }
             }
 
-            Log::error("SMS sending failed", [
+            Log::error("❌ SMS sending failed", [
                 'status' => $response->status(),
                 'body' => $response->body()
             ]);
@@ -77,14 +92,14 @@ class SmsService
             return false;
 
         } catch (\Exception $e) {
-            Log::error("SMS Error: " . $e->getMessage());
+            Log::error("❌ SMS Error: " . $e->getMessage());
             return false;
         }
     }
 
     private function logSms(string $phone, string $message): bool
     {
-        Log::info("SMS LOG MODE", [
+        Log::info("📱 SMS LOG MODE", [
             'phone' => $phone,
             'message' => $message
         ]);
@@ -115,8 +130,10 @@ class SmsService
     {
         return [
             'config' => [
+                'username_set' => !empty(config('services.mimsms.username')),
                 'api_key_set' => !empty(config('services.mimsms.api_key')),
                 'provider' => config('services.sms.provider'),
+                'api_url' => self::MIMSMS_API_URL,
             ],
             'server_ip' => $this->getServerIp(),
         ];
@@ -135,23 +152,31 @@ class SmsService
     public function checkBalance(): ?array
     {
         try {
-            $apiToken = config('services.mimsms.api_key');
-            if (!$apiToken) {
-                return ['success' => false, 'message' => 'API key missing'];
+            $username = config('services.mimsms.username');
+            $apiKey = config('services.mimsms.api_key');
+            
+            if (!$username || !$apiKey) {
+                return ['success' => false, 'message' => 'Credentials missing'];
             }
 
             $response = Http::withOptions([
                 CURLOPT_IPRESOLVE => CURL_IPRESOLVE_V4
-            ])->timeout(10)->asForm()->post(
-                'https://smsplus.sslwireless.com/api/v3/check-balance',
-                ['api_token' => $apiToken]
-            );
+            ])
+            ->timeout(10)
+            ->withHeaders([
+                'Content-Type' => 'application/json',
+            ])
+            ->post('https://api.mimsms.com/api/SmsSending/balanceCheck', [
+                'UserName' => $username,
+                'Apikey' => $apiKey,
+            ]);
 
             if ($response->successful()) {
                 $result = $response->json();
                 return [
                     'success' => true,
-                    'balance' => $result['balance'] ?? $result['current_balance'] ?? 0,
+                    'balance' => $result['responseResult'] ?? 0,
+                    'data' => $result
                 ];
             }
 
