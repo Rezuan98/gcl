@@ -13,17 +13,26 @@ return [
     | a conventional file to locate the various service credentials.
     |
     */
-    'twilio' => [
-    'sid' => env('TWILIO_SID'),
-    'token' => env('TWILIO_TOKEN'),
-    'from' => env('TWILIO_FROM'),
-],
+    'sms' => [
+        'provider' => env('SMS_PROVIDER', 'log'), // 'log', 'mimsms', 'twilio'
+    ],
 
-'sms' => [
-    'provider' => env('SMS_PROVIDER', 'log'),
-    'api_key' => env('SMS_API_KEY'),
-    'sender_id' => env('SMS_SENDER_ID', 'GCL'),
-],
+    /*
+    |--------------------------------------------------------------------------
+    | MiMSMS API Configuration (Bangladesh)
+    |--------------------------------------------------------------------------
+    |
+    | Get your credentials from https://www.mimsms.com/
+    | Login to your account > Developer Option
+    |
+    */
+
+    'mimsms' => [
+        'username' => env('MIMSMS_USERNAME'), // Your email/username
+        'api_key' => env('MIMSMS_API_KEY'), // Your API key from Developer Option
+        'sender_name' => env('MIMSMS_SENDER_NAME', 'GCL'), // Registered sender ID
+        'transaction_type' => env('MIMSMS_TRANSACTION_TYPE', 'T'), // T=Transactional, P=Promotional
+    ],
 
     'postmark' => [
         'token' => env('POSTMARK_TOKEN'),
