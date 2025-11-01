@@ -27,32 +27,19 @@ return [
     |
     */
 
+ 
+
+   
+
     'mimsms' => [
-        'username' => env('MIMSMS_USERNAME'), // Your email/username
-        'api_key' => env('MIMSMS_API_KEY'), // Your API key from Developer Option
-        'sender_name' => env('MIMSMS_SENDER_NAME', 'GCL'), // Registered sender ID
-        'transaction_type' => env('MIMSMS_TRANSACTION_TYPE', 'T'), // T=Transactional, P=Promotional
+        'username'          => env('MIMSMS_USERNAME'),
+        'api_key'           => env('MIMSMS_API_KEY'),
+        'sender_name'       => env('MIMSMS_SENDER_NAME', 'GCL'),
+        'transaction_type'  => env('MIMSMS_TRANSACTION_TYPE', 'T'), // 'T' or 'text'
     ],
 
-    'postmark' => [
-        'token' => env('POSTMARK_TOKEN'),
-    ],
 
-    'resend' => [
-        'key' => env('RESEND_KEY'),
-    ],
 
-    'ses' => [
-        'key' => env('AWS_ACCESS_KEY_ID'),
-        'secret' => env('AWS_SECRET_ACCESS_KEY'),
-        'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
-    ],
 
-    'slack' => [
-        'notifications' => [
-            'bot_user_oauth_token' => env('SLACK_BOT_USER_OAUTH_TOKEN'),
-            'channel' => env('SLACK_BOT_USER_DEFAULT_CHANNEL'),
-        ],
-    ],
 
 ];

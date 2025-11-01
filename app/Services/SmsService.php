@@ -2,229 +2,162 @@
 
 namespace App\Services;
 
-use Illuminate\Http\Client\ConnectionException;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Http;
 
 class SmsService
 {
-    private string $provider;
-
-    public function __construct()
+    private const MIMSMS_API_URL = 'https://smsplus.sslwireless.com/api/v3/send-sms';
+    
+    public function sendOtp(string $phone, string $otp): bool
     {
-        // falls back to env('SMS_PROVIDER', 'log') if not set in config
-        $this->provider = config('services.sms.provider', env('SMS_PROVIDER', 'log'));
-    }
+        $message = "Your GCL Tender Verification OTP: {$otp}. Valid for 5 minutes. Do not share this code.";
+        $provider = config('services.sms.provider', 'log');
 
-    /**
-     * Send a generic SMS message.
-     *
-     * @return array{ok:bool, provider:string, http_status:int|null, trxid:?string, error:?string, raw:mixed}
-     */
-    public function send(string $phone, string $message): array
-    {
-        $to = $this->normalizeMsisdn($phone);
-
-        return match ($this->provider) {
-            'mimsms' => $this->sendViaMimSms($to, $message),
-            'log'    => $this->logOnly($to, $message),
-            default  => $this->logOnly($to, $message),
+        return match($provider) {
+            'mimsms' => $this->sendMimSms($phone, $message),
+            'log' => $this->logSms($phone, $message),
+            default => $this->logSms($phone, $message),
         };
     }
 
-    /**
-     * Helper for OTP messages.
-     */
-    public function sendOtp(string $phone, string $otp, string $brand = 'GCL Tender Verification'): array
+    public function sendMimSms(string $phone, string $message): bool
     {
-        $msg = "Your {$brand} OTP: {$otp}. Valid for 5 minutes. Do not share this code.";
-        return $this->send($phone, $msg);
-    }
-
-    /**
-     * Check SMS balance (MiMSMS).
-     *
-     * @return array{ok:bool, provider:string, http_status:int|null, balance:int|null, error:?string, raw:mixed}
-     */
-    public function balance(): array
-    {
-        if ($this->provider !== 'mimsms') {
-            return [
-                'ok' => true, 'provider' => $this->provider, 'http_status' => null,
-                'balance' => null, 'error' => null, 'raw' => null,
-            ];
-        }
-
-        $apiKey = (string) config('services.mimsms.api_key');
-
         try {
-            $response = Http::acceptJson()
-                ->timeout(15)
-                ->retry(3, 250, throw: false)
-                ->get('https://api.mimsms.com/api/v1/get-balance', [
-                    'api_key' => $apiKey,
-                ]);
+            $apiToken = config('services.mimsms.api_key');
+            $sid = config('services.mimsms.sender_name', 'GCL');
 
-            $json = $response->json();
-
-            if ($response->successful() && isset($json['status']) && Str::upper($json['status']) === 'OK') {
-                return [
-                    'ok' => true,
-                    'provider' => 'mimsms',
-                    'http_status' => $response->status(),
-                    'balance' => (int) ($json['balance'] ?? 0),
-                    'error' => null,
-                    'raw' => $json,
-                ];
+            if (!$apiToken) {
+                Log::error('MiMSMS API Key is missing');
+                throw new \Exception('MiMSMS API Key is missing.');
             }
 
-            return [
-                'ok' => false,
-                'provider' => 'mimsms',
-                'http_status' => $response->status(),
-                'balance' => null,
-                'error' => $json['message'] ?? 'Balance check failed',
-                'raw' => $json,
-            ];
-        } catch (ConnectionException $e) {
-            Log::warning('SMS balance connection error', ['provider' => 'mimsms', 'error' => $e->getMessage()]);
-            return [
-                'ok' => false,
-                'provider' => 'mimsms',
-                'http_status' => null,
-                'balance' => null,
-                'error' => 'Network error while checking balance',
-                'raw' => null,
-            ];
-        }
-    }
+            $formattedPhone = $this->formatPhoneNumberForBangladesh($phone);
 
-    // ---------- Providers ----------
-
-    private function sendViaMimSms(string $phone, string $message): array
-    {
-        $apiKey  = (string) config('services.mimsms.api_key');
-        $sender  = (string) config('services.mimsms.sender_name', 'GCL');
-        $txType  = (string) config('services.mimsms.transaction_type', 'T');
-
-        // Auto-detect unicode if needed
-        $isUnicode = $this->containsUnicode($message);
-        $type      = $isUnicode ? 'unicode' : $txType;
-
-        $payload = [
-            'api_key'   => $apiKey,
-            'type'      => $type,           // 'T' or 'unicode'
-            'contacts'  => $phone,          // single or comma-separated
-            'senderid'  => $sender,
-            'msg'       => $message,
-        ];
-
-        try {
-            $response = Http::acceptJson()
-                ->timeout(20)               // fail fast
-                ->retry(3, 300, throw: false) // simple resiliency
-                ->post('https://api.mimsms.com/smsapi', $payload);
-
-            $json = $response->json();
-
-            // Success shape normally: { statusCode: 200, status: "OK", tranid: "...", responseResult: "..." }
-            if ($response->successful() && isset($json['status']) && Str::upper($json['status']) === 'OK') {
-                return [
-                    'ok' => true,
-                    'provider' => 'mimsms',
-                    'http_status' => $response->status(),
-                    'trxid' => $json['tranid'] ?? null,
-                    'error' => null,
-                    'raw' => $json,
-                ];
-            }
-
-            // Log with safe context (never log api_key or PII beyond what’s necessary)
-            Log::warning('SMS send failed via MiMSMS', [
-                'http_status' => $response->status(),
-                'provider' => 'mimsms',
-                'code' => $json['statusCode'] ?? null,
-                'status' => $json['status'] ?? null,
-                'message' => $json['message'] ?? null,
+            Log::info('Sending SMS via MiMSMS', [
+                'phone' => $formattedPhone,
+                'sender' => $sid
             ]);
 
-            return [
-                'ok' => false,
-                'provider' => 'mimsms',
-                'http_status' => $response->status(),
-                'trxid' => $json['tranid'] ?? null,
-                'error' => $json['message'] ?? 'MiMSMS error',
-                'raw' => $json,
+            $payload = [
+                'api_token' => $apiToken,
+                'sid' => $sid,
+                'sms' => $message,
+                'msisdn' => $formattedPhone,
+                'csms_id' => uniqid('gcl_', true),
             ];
-        } catch (ConnectionException $e) {
-            Log::error('SMS network error via MiMSMS', ['error' => $e->getMessage()]);
-            return [
-                'ok' => false,
-                'provider' => 'mimsms',
-                'http_status' => null,
-                'trxid' => null,
-                'error' => 'Network error while contacting MiMSMS',
-                'raw' => null,
-            ];
-        } catch (\Throwable $e) {
-            Log::error('SMS unexpected error via MiMSMS', ['error' => $e->getMessage()]);
-            return [
-                'ok' => false,
-                'provider' => 'mimsms',
-                'http_status' => null,
-                'trxid' => null,
-                'error' => 'Unexpected error while sending SMS',
-                'raw' => null,
-            ];
+
+            $response = Http::withOptions([
+                CURLOPT_IPRESOLVE => CURL_IPRESOLVE_V4,
+                CURLOPT_TIMEOUT => 30,
+            ])->asForm()->post(self::MIMSMS_API_URL, $payload);
+
+            Log::info('MiMSMS Response', [
+                'status' => $response->status(),
+                'body' => $response->body()
+            ]);
+
+            if ($response->successful()) {
+                $result = $response->json();
+                
+                if (
+                    (isset($result['status']) && strtoupper($result['status']) === 'SUCCESS') ||
+                    (isset($result['status_code']) && in_array($result['status_code'], [200, '200']))
+                ) {
+                    Log::info("✅ SMS sent successfully", ['phone' => $formattedPhone]);
+                    return true;
+                }
+            }
+
+            Log::error("SMS sending failed", [
+                'status' => $response->status(),
+                'body' => $response->body()
+            ]);
+            
+            return false;
+
+        } catch (\Exception $e) {
+            Log::error("SMS Error: " . $e->getMessage());
+            return false;
         }
     }
 
-    private function logOnly(string $phone, string $message): array
+    private function logSms(string $phone, string $message): bool
     {
-        Log::info('SMS[LOG]: message not sent to gateway (log provider)', [
-            'to' => $phone,
-            'len' => Str::length($message),
+        Log::info("SMS LOG MODE", [
+            'phone' => $phone,
+            'message' => $message
         ]);
+        return true;
+    }
 
+    private function formatPhoneNumberForBangladesh(string $phone): string
+    {
+        $phone = preg_replace('/[^\d]/', '', $phone);
+        $phone = ltrim($phone, '0');
+        
+        if (str_starts_with($phone, '880')) {
+            return $phone;
+        }
+        
+        if (str_starts_with($phone, '88') && strlen($phone) === 13) {
+            return $phone;
+        }
+        
+        if (str_starts_with($phone, '1') && strlen($phone) === 10) {
+            return '880' . $phone;
+        }
+        
+        return '880' . $phone;
+    }
+
+    public function testConnection(): array
+    {
         return [
-            'ok' => true,
-            'provider' => 'log',
-            'http_status' => null,
-            'trxid' => 'LOG-' . Str::random(8),
-            'error' => null,
-            'raw' => null,
+            'config' => [
+                'api_key_set' => !empty(config('services.mimsms.api_key')),
+                'provider' => config('services.sms.provider'),
+            ],
+            'server_ip' => $this->getServerIp(),
         ];
     }
 
-    // ---------- Helpers ----------
-
-    /**
-     * Normalize BD numbers.
-     * Accepts "01XXXXXXXXX", "+8801XXXXXXXXX", "8801XXXXXXXXX" → returns "01XXXXXXXXX" by default.
-     * Change behavior to your gateway’s preferred format if needed.
-     */
-    private function normalizeMsisdn(string $phone): string
+    private function getServerIp(): ?string
     {
-        $digits = preg_replace('/\D+/', '', $phone ?? '');
-
-        // If starts with 8801XXXXXXXXX, convert to 01XXXXXXXXX (MiMSMS accepts both; keep local format)
-        if (Str::startsWith($digits, '8801') && strlen($digits) === 13) {
-            return '0' . substr($digits, 3);
+        try {
+            $response = Http::timeout(5)->get('https://api.ipify.org?format=json');
+            return $response->json()['ip'] ?? null;
+        } catch (\Exception $e) {
+            return null;
         }
-
-        // If already 01XXXXXXXXX, keep as is
-        if (Str::startsWith($digits, '01') && strlen($digits) === 11) {
-            return $digits;
-        }
-
-        // Fallback: return original trimmed (let gateway validate)
-        return ltrim($phone);
     }
 
-    private function containsUnicode(string $text): bool
+    public function checkBalance(): ?array
     {
-        // Detect any non-GSM-7 char
-        return !preg_match('//u', $text) || strlen($text) !== mb_strlen($text, 'UTF-8');
+        try {
+            $apiToken = config('services.mimsms.api_key');
+            if (!$apiToken) {
+                return ['success' => false, 'message' => 'API key missing'];
+            }
+
+            $response = Http::withOptions([
+                CURLOPT_IPRESOLVE => CURL_IPRESOLVE_V4
+            ])->timeout(10)->asForm()->post(
+                'https://smsplus.sslwireless.com/api/v3/check-balance',
+                ['api_token' => $apiToken]
+            );
+
+            if ($response->successful()) {
+                $result = $response->json();
+                return [
+                    'success' => true,
+                    'balance' => $result['balance'] ?? $result['current_balance'] ?? 0,
+                ];
+            }
+
+            return ['success' => false, 'response' => $response->body()];
+        } catch (\Exception $e) {
+            return ['success' => false, 'message' => $e->getMessage()];
+        }
     }
 }
