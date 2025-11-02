@@ -8,13 +8,13 @@
       <p class="text-emerald-700/70">All proposals (excluding drafts). Verify using Proposal No. (common QR).</p>
     </div>
 
-    <button id="btn-open-create"
+    {{-- <button id="btn-open-create"
       class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shadow-lg shadow-emerald-600/20 transition">
       <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
       </svg>
       Add Proposal
-    </button>
+    </button> --}}
   </div>
 
   <!-- Filters -->

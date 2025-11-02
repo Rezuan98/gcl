@@ -60,8 +60,8 @@
             </td>
             <td class="px-6 py-3 text-sm">
               <div class="flex items-center gap-2">
-                <a href="{{ route('proposals.show', $p) }}" 
-                   class="text-emerald-600 hover:text-emerald-800 font-medium">View</a>
+                {{-- <a href="{{ route('proposals.show', $p) }}" 
+                   class="text-emerald-600 hover:text-emerald-800 font-medium">View</a> --}}
                 
                 <form method="POST" action="{{ route('proposals.publish', $p) }}" class="inline">
                   @csrf

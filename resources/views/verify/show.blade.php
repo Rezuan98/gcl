@@ -128,7 +128,7 @@
           </svg>
           <div>
             <p class="font-medium">OTP sent successfully!</p>
-            <p class="text-xs mt-1">Please check your phone. Code expires in 5 minutes.</p>
+            <p class="text-xs mt-1">Please check your phone. Code expires in 30s.</p>
           </div>
         </div>
       </div>
