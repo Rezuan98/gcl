@@ -102,7 +102,7 @@ class ProposalController extends Controller
                 ? 'Draft saved successfully!' 
                 : 'Proposal submitted successfully!';
 
-            return redirect()->route('proposals.drafts', $proposal)
+            return redirect()->route('proposals.index', $proposal)
                 ->with('success', $message);
 
         } catch (\Illuminate\Validation\ValidationException $e) {

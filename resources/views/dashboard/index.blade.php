@@ -5,7 +5,7 @@
     <div class="flex items-center justify-between mb-8">
         <div>
             <h1 class="text-3xl font-bold text-emerald-800">Dashboard</h1>
-            <p class="text-emerald-600 mt-1">Overview of your tender proposal system</p>
+            <p class="text-emerald-600 mt-1">Overview of your proposal Verification system</p>
         </div>
         <div class="flex gap-3">
             <button id="btn-open-create"

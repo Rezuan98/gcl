@@ -4,13 +4,14 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>GCL | Tender Verification</title>
+  <title>GCL | Proposal Verification</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
     html, body { 
       font-family: 'Inter', system-ui, -apple-system, Segoe UI, Roboto, 'Helvetica Neue', Arial, 'Noto Sans', 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol'; 
+      height: 100%;
     }
     
     /* Custom GCL Green Color */
@@ -25,6 +26,8 @@
     .gradient-bg {
       background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 50%, #a5d6a7 100%);
       min-height: 100vh;
+      display: flex;
+      flex-direction: column;
     }
     
     /* Header styling with GCL green */
@@ -70,6 +73,11 @@
     * {
       transition: all 0.2s ease-in-out;
     }
+
+    /* Make main content grow to push footer down */
+    main {
+      flex: 1;
+    }
   </style>
 </head>
 <body class="gradient-bg">
@@ -90,7 +98,7 @@
         </a>
         <a href="{{ route('proposals.index') }}" 
            class="px-4 py-2 rounded-lg hover:bg-white/10 font-medium {{ request()->routeIs('proposals.*') ? 'bg-white/20' : '' }}">
-          Tenders
+          Proposals
         </a>
       </nav>
     </div>
@@ -102,25 +110,24 @@
   </main>
 
   <!-- Footer -->
-  <footer class="mt-16 border-t border-green-200 bg-white/50 backdrop-blur-sm">
+  <footer class="border-t border-green-200 bg-white/50 backdrop-blur-sm mt-auto">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
       <div class="flex flex-col md:flex-row justify-between items-center gap-4">
         <p class="text-sm text-gcl-green-dark">
-          © {{ now()->year }} Grameen CyberNet Limited – Tender Verification System
+          © {{ now()->year }} Grameen CyberNet Limited — Proposal Verification System
         </p>
         <div class="flex items-center gap-2 text-xs text-gray-600">
-  <!-- Logo -->
-  <img src="/revencomm-logo.png" alt="RevEnComm Logo" class="w-4 h-4 object-contain" />
+          <!-- Logo -->
+          <img src="/revencomm-logo.png" alt="RevEnComm Logo" class="w-4 h-4 object-contain" />
 
-  <!-- Text -->
-  <span class="font-medium">
-    Designed & Developed by 
-    <a href="https://revencomm.com" target="_blank" class="text-gcl-green hover:underline hover:text-gcl-green/80 transition">
-      RevEnComm
-    </a>
-  </span>
-</div>
-
+          <!-- Text -->
+          <span class="font-medium">
+            Designed & Developed by 
+            <a href="https://revencomm.com" target="_blank" class="text-gcl-green hover:underline hover:text-gcl-green/80 transition">
+              RevEnComm
+            </a>
+          </span>
+        </div>
       </div>
     </div>
   </footer>
