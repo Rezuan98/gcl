@@ -28,10 +28,9 @@
   <div class="bg-white shadow-2xl rounded-2xl w-full p-6 md:p-8" id="mainContainer" style="max-width: 600px;">
     <!-- Header -->
     <div class="text-center mb-2">
-     <!-- From h-16 w-16 (64px) to h-24 w-24 (96px) -->
-<div class="mx-auto h-32 w-32 flex items-center justify-center">
-  <img src="{{ asset('logo.png') }}" alt="GCL Logo" class="h-full w-full object-contain">
-</div>
+      <div class="mx-auto h-32 w-32 flex items-center justify-center">
+        <img src="{{ asset('logo.png') }}" alt="GCL Logo" class="h-full w-full object-contain">
+      </div>
       <h1 class="mt-0 text-xl font-extrabold text-emerald-800">Proposal Verification</h1>
       <p class="text-sm text-emerald-600 mt-1">Secure access to your proposal document</p>
     </div>
@@ -50,20 +49,20 @@
       </div>
     </div>
 
-    <!-- Step 1: Send OTP -->
+    <!-- Step 1: Sending OTP (Automatic) -->
     <div id="step1">
       <div class="mb-4">
-        <p class="text-sm text-emerald-700">OTP will be sent to the registered phone number:</p>
+        <p class="text-sm text-emerald-700">Sending OTP to the registered phone number:</p>
         <div class="mt-2 px-4 py-3 rounded-lg border border-emerald-300 bg-emerald-50 font-mono text-emerald-800 tracking-wide text-center text-lg">
           {{ $proposal->masked_phone }}
         </div>
       </div>
 
-      <button id="sendOtpBtn" onclick="sendOtp()"
-              class="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-3 rounded-lg font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-        <span id="sendOtpBtnText">Send OTP</span>
-        <div id="sendOtpLoader" class="hidden inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin ml-2"></div>
-      </button>
+      <!-- Loading Indicator -->
+      <div id="sendingLoader" class="flex flex-col items-center justify-center py-6">
+        <div class="inline-block w-12 h-12 border-4 border-emerald-200 border-t-emerald-600 rounded-full animate-spin"></div>
+        <p class="mt-4 text-sm text-emerald-700 font-medium">Sending OTP...</p>
+      </div>
 
       <div id="otpSentNote" class="hidden mt-3 p-3 text-sm text-emerald-700 bg-emerald-50 rounded-lg border border-emerald-200">
         <div class="flex items-center">
@@ -79,15 +78,52 @@
         </div>
         @endif
       </div>
+
+      <!-- Error Display for Step 1 -->
+      <div id="sendError" class="hidden mt-3 p-3 text-sm text-rose-700 bg-rose-50 rounded-lg border border-rose-200">
+        <div class="flex items-start">
+          <svg class="w-4 h-4 mr-2 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"></path>
+          </svg>
+          <div class="flex-1">
+            <p id="sendErrorMessage" class="font-medium">Failed to send OTP</p>
+            <button onclick="sendOtp()" class="mt-2 text-xs text-emerald-600 hover:text-emerald-700 underline font-medium">
+              Try Again
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- Step 2: Verify OTP -->
     <div id="step2" class="hidden">
+      <!-- Instruction Message -->
+      <div class="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+        <p class="text-sm text-blue-800">
+          An OTP has been sent to <strong class="font-mono" id="maskedPhoneInStep2">{{ $proposal->masked_phone }}</strong>. 
+          Please enter the OTP to verify and access the proposal.
+        </p>
+        <p class="text-xs text-blue-600 mt-1">
+          ⏱️ OTP is valid for <strong>5 minutes</strong>
+        </p>
+      </div>
+
       <div class="space-y-4">
         <div>
           <label class="block text-sm font-medium text-emerald-800 mb-2">Enter OTP</label>
-          <input id="otpInput" type="text" maxlength="6" placeholder="6-digit code"
+          <input id="otpInput" 
+                 type="text" 
+                 inputmode="numeric"
+                 autocomplete="one-time-code"
+                 maxlength="6" 
+                 placeholder="6-digit code"
                  class="w-full border border-emerald-300 rounded-lg px-3 py-3 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-center tracking-widest text-xl font-bold">
+          <p class="mt-1 text-xs text-gray-500 flex items-center gap-1">
+            <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+              <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
+            </svg>
+            <span>OTP may auto-fill from SMS on supported devices</span>
+          </p>
         </div>
         
         <button id="verifyBtn" onclick="verifyOtp()"
@@ -104,6 +140,7 @@
                   class="text-sm text-emerald-600 hover:text-emerald-700 underline disabled:opacity-50 disabled:cursor-not-allowed disabled:no-underline">
             Resend OTP
           </button>
+          <p id="resendTimer" class="hidden text-xs text-gray-500 mt-1"></p>
         </div>
       </div>
     </div>
@@ -112,10 +149,10 @@
     <div id="step3" class="hidden">
       <div class="text-center mb-4">
         <div class="mx-auto w-20 h-20 mb-3 flex items-center justify-center rounded-full bg-emerald-100">
-  <svg class="w-12 h-12 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-  </svg>
-</div>
+          <svg class="w-12 h-12 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+          </svg>
+        </div>
         <h2 class="text-xl font-bold text-emerald-800">Verification Successful!</h2>
         <p class="text-xs text-gray-500 mt-1">
           Verified at: <span id="verifiedTime"></span>
@@ -202,25 +239,29 @@
     const step3 = document.getElementById('step3');
     const mainContainer = document.getElementById('mainContainer');
 
+    const sendingLoader = document.getElementById('sendingLoader');
     const otpSentNote = document.getElementById('otpSentNote');
+    const sendError = document.getElementById('sendError');
+    const sendErrorMessage = document.getElementById('sendErrorMessage');
     const otpError = document.getElementById('otpError');
     const otpInput = document.getElementById('otpInput');
 
     // Buttons and loaders
-    const sendOtpBtn = document.getElementById('sendOtpBtn');
-    const sendOtpBtnText = document.getElementById('sendOtpBtnText');
-    const sendOtpLoader = document.getElementById('sendOtpLoader');
-
     const verifyBtn = document.getElementById('verifyBtn');
     const verifyBtnText = document.getElementById('verifyBtnText');
     const verifyLoader = document.getElementById('verifyLoader');
 
     const resendBtn = document.getElementById('resendBtn');
+    const resendTimer = document.getElementById('resendTimer');
 
     // PDF viewer elements
     const pdfViewerContainer = document.getElementById('pdfViewerContainer');
     const pdfViewer = document.getElementById('pdfViewer');
     const viewBtnText = document.getElementById('viewBtnText');
+
+    // Resend timer variables
+    let resendTimeout = null;
+    let resendCountdown = null;
 
     // Utility functions
     function showError(message) {
@@ -232,6 +273,16 @@
       otpError.classList.add('hidden');
     }
 
+    function showSendError(message) {
+      sendErrorMessage.textContent = message;
+      sendError.classList.remove('hidden');
+      sendingLoader.classList.add('hidden');
+    }
+
+    function hideSendError() {
+      sendError.classList.add('hidden');
+    }
+
     function setLoading(btn, textEl, loader, loading) {
       btn.disabled = loading;
       if (loading) {
@@ -241,6 +292,31 @@
         textEl.classList.remove('hidden');
         loader.classList.add('hidden');
       }
+    }
+
+    function startResendTimer(seconds = 30) {
+      resendBtn.disabled = true;
+      let remaining = seconds;
+      
+      // Clear any existing timers
+      if (resendTimeout) clearTimeout(resendTimeout);
+      if (resendCountdown) clearInterval(resendCountdown);
+      
+      // Update timer display
+      resendTimer.textContent = `Resend available in ${remaining}s`;
+      resendTimer.classList.remove('hidden');
+      
+      // Countdown
+      resendCountdown = setInterval(() => {
+        remaining--;
+        resendTimer.textContent = `Resend available in ${remaining}s`;
+        
+        if (remaining <= 0) {
+          clearInterval(resendCountdown);
+          resendTimer.classList.add('hidden');
+          resendBtn.disabled = false;
+        }
+      }, 1000);
     }
 
     // Toggle PDF viewer
@@ -286,9 +362,11 @@
 
     // Send OTP
     async function sendOtp() {
-      setLoading(sendOtpBtn, sendOtpBtnText, sendOtpLoader, true);
-      resendBtn.disabled = true;
+      // Show loading state
+      sendingLoader.classList.remove('hidden');
+      hideSendError();
       hideError();
+      resendBtn.disabled = true;
 
       try {
         const result = await apiCall('{{ route("verify.send-otp") }}', { 
@@ -296,7 +374,13 @@
         });
 
         if (result.success) {
+          // Hide loading
+          sendingLoader.classList.add('hidden');
+          
+          // Show success message
           otpSentNote.classList.remove('hidden');
+          
+          // Move to step 2
           step1.classList.add('hidden');
           step2.classList.remove('hidden');
           
@@ -311,15 +395,14 @@
           // Focus OTP input
           setTimeout(() => otpInput.focus(), 100);
           
-          // Enable resend after 30 seconds
-          setTimeout(() => {
-            resendBtn.disabled = false;
-          }, 30000);
+          // ⭐ Start WebOTP listener for auto-fill ⭐
+          setupWebOTP();
+          
+          // Start resend timer (30 seconds)
+          startResendTimer(30);
         }
       } catch (error) {
-        showError(error.message);
-      } finally {
-        setLoading(sendOtpBtn, sendOtpBtnText, sendOtpLoader, false);
+        showSendError(error.message || 'Failed to send OTP. Please try again.');
       }
     }
 
@@ -399,6 +482,47 @@
       if (e.key === 'Enter') {
         verifyOtp();
       }
+    });
+
+    // ⭐ WebOTP API - Auto-fill OTP from SMS ⭐
+    async function setupWebOTP() {
+      if ('OTPCredential' in window) {
+        try {
+          const ac = new AbortController();
+          
+          // Set timeout for OTP retrieval (5 minutes to match OTP expiry)
+          setTimeout(() => {
+            ac.abort();
+          }, 5 * 60 * 1000);
+
+          // Request OTP from SMS
+          const otp = await navigator.credentials.get({
+            otp: { transport: ['sms'] },
+            signal: ac.signal
+          });
+
+          if (otp && otp.code) {
+            console.log('✅ OTP auto-filled from SMS:', otp.code);
+            otpInput.value = otp.code;
+            
+            // Small delay for better UX, then auto-verify
+            setTimeout(() => {
+              verifyOtp();
+            }, 500);
+          }
+        } catch (err) {
+          // User cancelled or error occurred
+          console.log('WebOTP not available or cancelled:', err);
+        }
+      } else {
+        console.log('WebOTP API not supported on this browser');
+      }
+    }
+
+    // ⭐ AUTO-SEND OTP ON PAGE LOAD ⭐
+    window.addEventListener('DOMContentLoaded', function() {
+      console.log('Page loaded, automatically sending OTP...');
+      sendOtp();
     });
   </script>
 </body>

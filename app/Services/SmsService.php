@@ -12,7 +12,13 @@ class SmsService
     
     public function sendOtp(string $phone, string $otp): bool
     {
-        $message = "Your GCL Tender Verification OTP: {$otp}. Valid for 5 minutes. Do not share this code.";
+        // WebOTP API compatible format
+        // Format: Your code is 123456. @yourdomain.com #123456
+        // This allows browsers to auto-detect and fill OTP
+        $appDomain = parse_url(config('app.url'), PHP_URL_HOST);
+        
+        $message = "Your GCL Tender Verification OTP: {$otp}. Valid for 5 minutes. Do not share this code.\n\n@{$appDomain} #{$otp}";
+        
         $provider = config('services.sms.provider', 'log');
 
         return match($provider) {
