@@ -5,56 +5,24 @@ namespace App\Http\Controllers;
 use App\Models\Proposal;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use App\Services\SmsService;
 
 class VerifyController extends Controller
 {
     /**
-     * Show the public verification page
+     * Show the public verification page for a specific proposal
      */
-    public function show()
+    public function show($token)
     {
-        return view('verify.show');
-    }
-
-    /**
-     * Look up a proposal by proposal number
-     */
-    public function lookup(Request $request)
-    {
-        $request->validate([
-            'proposal_no' => 'required|string|max:50'
-        ]);
-
-        $proposalNo = strtoupper(trim($request->proposal_no));
-        
-        // Find the proposal (exclude drafts from public verification)
-        $proposal = Proposal::where('proposal_no', $proposalNo)
+        $proposal = Proposal::where('unique_token', $token)
             ->where('status', '!=', 'draft')
             ->first();
 
         if (!$proposal) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Proposal not found. Please check the number and try again.'
-            ], 404);
+            abort(404, 'Proposal not found or not available for verification.');
         }
 
-        // Check if proposal has a phone number for OTP
-        if (!$proposal->client_phone) {
-            return response()->json([
-                'success' => false,
-                'message' => 'This proposal does not have a registered phone number for verification.'
-            ], 422);
-        }
-
-        return response()->json([
-            'success' => true,
-            'data' => [
-                'proposal_no' => $proposal->proposal_no,
-                'masked_phone' => $proposal->masked_phone,
-                'has_phone' => !empty($proposal->client_phone)
-            ]
-        ]);
+        return view('verify.show', compact('proposal'));
     }
 
     /**
@@ -63,12 +31,10 @@ class VerifyController extends Controller
     public function sendOtp(Request $request)
     {
         $request->validate([
-            'proposal_no' => 'required|string|max:50'
+            'token' => 'required|string'
         ]);
 
-        $proposalNo = strtoupper(trim($request->proposal_no));
-        
-        $proposal = Proposal::where('proposal_no', $proposalNo)
+        $proposal = Proposal::where('unique_token', $request->token)
             ->where('status', '!=', 'draft')
             ->first();
 
@@ -84,12 +50,17 @@ class VerifyController extends Controller
             $otp = $proposal->generateOtp();
             
             // Send SMS using SMS service
-            $smsService = new \App\Services\SmsService();
+            $smsService = new SmsService();
             $smsSent = $smsService->sendOtp($proposal->client_phone, $otp);
             
             if (!$smsSent) {
                 throw new \Exception('Failed to send SMS');
             }
+            
+            Log::info("OTP sent for proposal", [
+                'token' => $proposal->unique_token,
+                'phone' => $proposal->masked_phone
+            ]);
             
             return response()->json([
                 'success' => true,
@@ -98,7 +69,7 @@ class VerifyController extends Controller
             ]);
             
         } catch (\Exception $e) {
-            Log::error("Failed to send OTP for proposal {$proposal->proposal_no}: " . $e->getMessage());
+            Log::error("Failed to send OTP for proposal {$proposal->unique_token}: " . $e->getMessage());
             
             return response()->json([
                 'success' => false,
@@ -113,14 +84,13 @@ class VerifyController extends Controller
     public function verifyOtp(Request $request)
     {
         $request->validate([
-            'proposal_no' => 'required|string|max:50',
+            'token' => 'required|string',
             'otp' => 'required|string|size:6'
         ]);
 
-        $proposalNo = strtoupper(trim($request->proposal_no));
         $otp = trim($request->otp);
         
-        $proposal = Proposal::where('proposal_no', $proposalNo)
+        $proposal = Proposal::where('unique_token', $request->token)
             ->where('status', '!=', 'draft')
             ->first();
 
@@ -142,24 +112,53 @@ class VerifyController extends Controller
         // Clear OTP after successful verification
         $proposal->clearOtp();
         
-        // Mark as verified if it was pending
-        if ($proposal->status === 'pending') {
-            $proposal->update(['status' => 'verified']);
-        }
+        // Mark as verified
+        $proposal->markAsVerified();
 
-        // Return proposal details
+        Log::info("Proposal verified successfully", [
+            'token' => $proposal->unique_token,
+            'verification_count' => $proposal->verification_count
+        ]);
+
+        // Return proposal details with PDF download link
         return response()->json([
             'success' => true,
             'message' => 'Proposal verified successfully!',
             'data' => [
-                'proposal_no' => $proposal->proposal_no,
                 'title' => $proposal->title,
-                'amount' => $proposal->formatted_amount,
-                'client_org' => $proposal->client_org ?? 'Not specified',
+                'company_name' => $proposal->company_name,
                 'client_phone' => $proposal->client_phone,
+                'has_pdf' => $proposal->hasPdf(),
+                'pdf_url' => $proposal->pdf_url,
                 'status' => ucfirst($proposal->status),
-                'verified_at' => now()->format('M j, Y \a\t g:i A')
+                'verified_at' => $proposal->verified_at->format('M j, Y \a\t g:i A'),
+                'verification_count' => $proposal->verification_count
             ]
         ]);
+    }
+
+    /**
+     * Download proposal PDF (after OTP verification)
+     */
+    public function downloadPdf($token)
+    {
+        $proposal = Proposal::where('unique_token', $token)
+            ->where('status', 'verified')
+            ->first();
+
+        if (!$proposal) {
+            abort(404, 'Proposal not found or not verified.');
+        }
+
+        if (!$proposal->hasPdf()) {
+            abort(404, 'PDF file not found.');
+        }
+
+        $filename = $proposal->title . '.pdf';
+        
+        return response()->download(
+            storage_path('app/public/' . $proposal->pdf_path),
+            $filename
+        );
     }
 }

@@ -13,14 +13,11 @@ return new class extends Migration
     {
         Schema::create('proposals', function (Blueprint $table) {
             $table->id();
-            $table->string('proposal_no', 50)->unique();
+            $table->string('unique_token', 100)->unique(); // Unique URL token
             $table->string('title');
-            $table->decimal('amount', 15, 2)->nullable();
-            $table->string('currency_code', 3)->default('BDT');
-            $table->string('client_org')->nullable();
-            $table->string('contact_person')->nullable();
-            $table->string('client_email')->nullable();
+            $table->string('company_name');
             $table->string('client_phone', 50); // Required for OTP verification
+            $table->string('pdf_path')->nullable(); // Path to uploaded PDF
             $table->text('notes')->nullable();
             $table->enum('status', ['draft', 'pending', 'verified'])->default('pending');
             
@@ -28,12 +25,16 @@ return new class extends Migration
             $table->string('otp_code', 6)->nullable();
             $table->timestamp('otp_expires_at')->nullable();
             
+            // Track verification
+            $table->timestamp('verified_at')->nullable();
+            $table->integer('verification_count')->default(0);
+            
             $table->timestamps();
             
             // Indexes
+            $table->index('unique_token');
             $table->index('status');
             $table->index('client_phone');
-            $table->index(['proposal_no', 'status']);
         });
     }
 

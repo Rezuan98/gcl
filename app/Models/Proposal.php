@@ -3,98 +3,104 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Support\Carbon;
+use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Storage;
 
 class Proposal extends Model
 {
     protected $fillable = [
-        'proposal_no', 
-        'title', 
-        'amount',
-        'currency_code',
-        'client_org', 
-         
-        'client_email', 
-        'client_phone', // Used for OTP verification
-        'notes', 
+        'unique_token',
+        'title',
+        'company_name',
+        'client_phone',
+        'pdf_path',
+        'notes',
         'status',
-        'otp_code', 
+        'otp_code',
         'otp_expires_at',
+        'verified_at',
+        'verification_count',
     ];
 
     protected $casts = [
-        'amount' => 'decimal:2',
         'otp_expires_at' => 'datetime',
+        'verified_at' => 'datetime',
+        'verification_count' => 'integer',
     ];
 
     /**
-     * Get masked phone number for security
+     * Generate unique verification token
+     */
+    public static function generateUniqueToken(): string
+    {
+        do {
+            $token = Str::random(32);
+        } while (self::where('unique_token', $token)->exists());
+
+        return $token;
+    }
+
+    /**
+     * Get the verification URL for this proposal
+     */
+    public function getVerificationUrlAttribute(): string
+    {
+        return route('proposal.verify', ['token' => $this->unique_token]);
+    }
+
+    /**
+     * Get masked phone number
      */
     public function getMaskedPhoneAttribute(): string
     {
-        $phone = $this->client_phone ?? '';
-        if (strlen($phone) < 7) {
-            return '***********';
-        }
-        return substr($phone, 0, 3) . '****' . substr($phone, -4);
-    }
-
-    /**
-     * Get formatted amount with currency
-     */
-    public function getFormattedAmountAttribute(): string
-    {
-        if (!$this->amount) {
-            return 'Not specified';
+        if (!$this->client_phone) {
+            return 'N/A';
         }
 
-        $symbol = $this->currency_code === 'BDT' ? '৳' : $this->currency_code . ' ';
-        return $symbol . ' ' . number_format($this->amount, 2);
-    }
-
-    /**
-     * Get status badge class for UI
-     */
-    public function getStatusBadgeClassAttribute(): string
-    {
-        return match($this->status) {
-            'verified' => 'bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200',
-            'pending' => 'bg-yellow-100 text-yellow-700 ring-1 ring-yellow-200',
-            'draft' => 'bg-gray-100 text-gray-700 ring-1 ring-gray-200',
-            default => 'bg-gray-100 text-gray-700 ring-1 ring-gray-200'
-        };
-    }
-
-    /**
-     * Check if OTP is valid
-     */
-    public function otpIsValid(string $code): bool
-    {
-        if (!$this->otp_code || !$this->otp_expires_at) {
-            return false;
+        $phone = preg_replace('/[^\d]/', '', $this->client_phone);
+        
+        if (strlen($phone) >= 10) {
+            $lastFour = substr($phone, -4);
+            $masked = str_repeat('*', strlen($phone) - 4) . $lastFour;
+            return $masked;
         }
         
-        return $this->otp_code === $code && Carbon::now()->lt($this->otp_expires_at);
+        return substr($phone, 0, 3) . str_repeat('*', strlen($phone) - 3);
     }
 
     /**
-     * Generate and save OTP for client_phone
+     * Generate OTP for verification
      */
     public function generateOtp(): string
     {
-        $otp = str_pad((string)random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+        $otp = str_pad((string)random_int(100000, 999999), 6, '0', STR_PAD_LEFT);
         
         $this->update([
             'otp_code' => $otp,
-            'otp_expires_at' => now()->addMinutes(5), // 5 minutes expiry
+            'otp_expires_at' => now()->addMinutes(5)
         ]);
 
         return $otp;
     }
 
     /**
-     * Clear OTP data
+     * Verify OTP
+     */
+    public function otpIsValid(string $otp): bool
+    {
+        if (!$this->otp_code || !$this->otp_expires_at) {
+            return false;
+        }
+
+        if ($this->otp_expires_at->isPast()) {
+            return false;
+        }
+
+        return $this->otp_code === $otp;
+    }
+
+    /**
+     * Clear OTP after successful verification
      */
     public function clearOtp(): void
     {
@@ -105,63 +111,75 @@ class Proposal extends Model
     }
 
     /**
-     * Get the phone number for OTP verification
+     * Mark proposal as verified
      */
-    public function getVerificationPhoneAttribute(): string
+    public function markAsVerified(): void
     {
-        return $this->client_phone;
+        $this->update([
+            'status' => 'verified',
+            'verified_at' => now(),
+            'verification_count' => $this->verification_count + 1,
+        ]);
     }
 
     /**
-     * Scope for published proposals (non-draft)
+     * Get PDF URL for download
      */
-    public function scopePublished(Builder $query): Builder
+    public function getPdfUrlAttribute(): ?string
     {
-        return $query->where('status', '!=', 'draft');
+        if (!$this->pdf_path) {
+            return null;
+        }
+
+        return Storage::url($this->pdf_path);
     }
 
     /**
-     * Scope for draft proposals
+     * Check if PDF exists
      */
-    public function scopeDrafts(Builder $query): Builder
+    public function hasPdf(): bool
     {
-        return $query->where('status', 'draft');
+        return $this->pdf_path && Storage::disk('public')->exists($this->pdf_path);
     }
 
     /**
-     * Scope for verified proposals
+     * Delete PDF file
      */
-    public function scopeVerified(Builder $query): Builder
+    public function deletePdf(): void
     {
-        return $query->where('status', 'verified');
-    }
-
-    /**
-     * Scope for pending proposals
-     */
-    public function scopePending(Builder $query): Builder
-    {
-        return $query->where('status', 'pending');
+        if ($this->pdf_path && Storage::disk('public')->exists($this->pdf_path)) {
+            Storage::disk('public')->delete($this->pdf_path);
+        }
     }
 
     /**
      * Search scope
      */
-    public function scopeSearch(Builder $query, string $search): Builder
+    public function scopeSearch($query, $search)
     {
-        return $query->where(function ($q) use ($search) {
-            $q->where('proposal_no', 'like', "%{$search}%")
-              ->orWhere('title', 'like', "%{$search}%")
-              ->orWhere('client_org', 'like', "%{$search}%")
-              ->orWhere('contact_person', 'like', "%{$search}%");
+        return $query->where(function($q) use ($search) {
+            $q->where('title', 'like', "%{$search}%")
+              ->orWhere('company_name', 'like', "%{$search}%")
+              ->orWhere('client_phone', 'like', "%{$search}%")
+              ->orWhere('unique_token', 'like', "%{$search}%");
         });
     }
 
     /**
      * Get route key name for route model binding
      */
-    public function getRouteKeyName(): string
+    public function getRouteKeyName()
     {
-        return 'proposal_no';
+        return 'id';
+    }
+
+    /**
+     * Delete proposal and its PDF when model is deleted
+     */
+    protected static function booted()
+    {
+        static::deleting(function ($proposal) {
+            $proposal->deletePdf();
+        });
     }
 }

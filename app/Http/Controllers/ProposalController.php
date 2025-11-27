@@ -4,7 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Models\Proposal;
 use Illuminate\Http\Request;
-use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Log;
 
 class ProposalController extends Controller
 {
@@ -27,7 +28,8 @@ class ProposalController extends Controller
         }
 
         $proposals = $query->paginate(15)->withQueryString();
-
+          
+       
         return view('proposals.index', compact('proposals'));
     }
 
@@ -49,64 +51,65 @@ class ProposalController extends Controller
         return view('proposals.draft', compact('proposals'));
     }
 
-   
-    
-   public function store(Request $request)
+    /**
+     * Store a new proposal
+     */
+    public function store(Request $request)
     {
-        // Debug: Log the incoming request
-        \Log::info('Proposal Store Request', $request->all());
-
         try {
             $validated = $request->validate([
-                
-                'title'            => ['required','string','max:255'],
-                'amount'           => ['nullable','numeric','min:0'],
-                'currency_code'    => ['nullable','string','max:3'],
-                'client_org'       => ['nullable','string','max:255'],
-                
-                'client_email'     => ['nullable','email','max:255'],
-                'client_phone'     => ['required','string','max:50'], // Required for OTP
-                'notes'            => ['nullable','string'],
-                'save_as_draft'    => ['nullable','boolean'],
+                'title'            => ['required', 'string', 'max:255'],
+                'company_name'     => ['required', 'string', 'max:255'],
+                'client_phone'     => ['required', 'string', 'max:50'],
+                'pdf_file'         => ['required', 'file', 'mimes:pdf'], // Max 10MB
+                'notes'            => ['nullable', 'string'],
+                'save_as_draft'    => ['nullable', 'boolean'],
             ]);
 
-            \Log::info('Validation passed', $validated);
+            Log::info('Proposal Store Request', $validated);
 
-            // Generate proposal number if not provided
-            $proposalNo = $validated['proposal_no'] ?? $this->generateProposalNo();
-            
-            \Log::info('Generated proposal number', ['proposal_no' => $proposalNo]);
+            // Handle PDF upload
+            $pdfPath = null;
+            if ($request->hasFile('pdf_file')) {
+                $file = $request->file('pdf_file');
+                $filename = time() . '_' . $file->getClientOriginalName();
+                $pdfPath = $file->storeAs('proposals', $filename, 'public');
+                
+                Log::info('PDF uploaded', ['path' => $pdfPath]);
+            }
+
+            // Generate unique verification token
+            $uniqueToken = Proposal::generateUniqueToken();
 
             $proposalData = [
-                'proposal_no'      => $proposalNo,
+                'unique_token'     => $uniqueToken,
                 'title'            => $validated['title'],
-                'amount'           => $validated['amount'] ?? null,
-                'currency_code'    => strtoupper($validated['currency_code'] ?? 'BDT'),
-                'client_org'       => $validated['client_org'] ?? null,
-               
-                'client_email'     => $validated['client_email'] ?? null,
+                'company_name'     => $validated['company_name'],
                 'client_phone'     => $validated['client_phone'],
+                'pdf_path'         => $pdfPath,
                 'notes'            => $validated['notes'] ?? null,
                 'status'           => $request->boolean('save_as_draft') ? 'draft' : 'pending',
             ];
 
-            \Log::info('About to create proposal with data', $proposalData);
-
             $proposal = Proposal::create($proposalData);
 
-            \Log::info('Proposal created successfully', ['id' => $proposal->id]);
+            Log::info('Proposal created successfully', [
+                'id' => $proposal->id,
+                'token' => $proposal->unique_token
+            ]);
 
             $message = $proposal->status === 'draft' 
                 ? 'Draft saved successfully!' 
                 : 'Proposal submitted successfully!';
 
-            return back()->with('success', $message);
+            return redirect()->route('proposals.drafts', $proposal)
+                ->with('success', $message);
 
         } catch (\Illuminate\Validation\ValidationException $e) {
-            \Log::error('Validation failed', ['errors' => $e->errors()]);
+            Log::error('Validation failed', ['errors' => $e->errors()]);
             return back()->withErrors($e->errors())->withInput();
         } catch (\Exception $e) {
-            \Log::error('Failed to create proposal', [
+            Log::error('Failed to create proposal', [
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
             ]);
@@ -115,12 +118,20 @@ class ProposalController extends Controller
     }
 
     /**
-     * Update proposal status (pending to verified or back to pending)
+     * Display a single proposal
+     */
+    public function show(Proposal $proposal)
+    {
+        return view('proposals.show', compact('proposal'));
+    }
+
+    /**
+     * Update proposal status
      */
     public function updateStatus(Request $request, Proposal $proposal)
     {
         $validated = $request->validate([
-            'status' => ['required', 'in:pending,verified']
+            'status' => ['required', 'in:pending,verified,draft']
         ]);
 
         $proposal->update(['status' => $validated['status']]);
@@ -143,27 +154,24 @@ class ProposalController extends Controller
     }
 
     /**
+     * Copy verification URL
+     */
+    public function copyUrl(Proposal $proposal)
+    {
+        return response()->json([
+            'success' => true,
+            'url' => $proposal->verification_url
+        ]);
+    }
+
+    /**
      * Delete a proposal
      */
     public function destroy(Proposal $proposal)
     {
         $proposal->delete();
-        return back()->with('success', 'Proposal deleted successfully!');
-    }
-
-    /**
-     * Generate a unique proposal number
-     */
-    private function generateProposalNo(): string
-    {
-        $year = now()->format('Y');
-        
-        do {
-            $seq = str_pad((string)random_int(1, 99999), 5, '0', STR_PAD_LEFT);
-            $proposalNo = "P{$year}{$seq}";
-        } while (Proposal::where('proposal_no', $proposalNo)->exists());
-
-        return $proposalNo;
+        return redirect()->route('proposals.index')
+            ->with('success', 'Proposal deleted successfully!');
     }
 
     /**

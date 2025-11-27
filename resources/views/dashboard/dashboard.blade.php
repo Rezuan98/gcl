@@ -79,7 +79,7 @@
       <div class="flex items-center gap-3">
         <div>
           <a href="{{ url('/') }}" class="hover:opacity-90 transition-opacity">
-            <img src="{{ asset('logo.png') }}" alt="GCL Logo" class="h-10">
+            <img src="{{ asset('logo.png') }}" alt="GCL Logo" class="h-12">
           </a>
         </div>
       </div>
@@ -90,7 +90,7 @@
         </a>
         <a href="{{ route('proposals.index') }}" 
            class="px-4 py-2 rounded-lg hover:bg-white/10 font-medium {{ request()->routeIs('proposals.*') ? 'bg-white/20' : '' }}">
-          Proposals
+          Tenders
         </a>
       </nav>
     </div>
@@ -106,7 +106,7 @@
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
       <div class="flex flex-col md:flex-row justify-between items-center gap-4">
         <p class="text-sm text-gcl-green-dark">
-          © {{ now()->year }} Grameen Cybernet Limited – Tender Verification System
+          © {{ now()->year }} Grameen CyberNet Limited – Tender Verification System
         </p>
         <div class="flex items-center gap-2 text-xs text-gray-600">
   <!-- Logo -->

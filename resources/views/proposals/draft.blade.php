@@ -4,7 +4,7 @@
   <!-- Heading -->
   <div class="mb-6">
     <h1 class="text-2xl md:text-3xl font-extrabold text-emerald-800">Draft Proposals</h1>
-    <p class="text-emerald-700/70">Drafts are hidden from public verification until published.</p>
+    <p class="text-emerald-700/70">Drafts don't have verification URLs yet. Publish them to generate URLs.</p>
   </div>
 
   <!-- Flash Messages -->
@@ -22,7 +22,7 @@
 
   <!-- Filters -->
   <form method="GET" class="mb-4 flex flex-col sm:flex-row gap-3">
-    <input name="search" value="{{ request('search') }}" placeholder="Search proposal no / title / client…"
+    <input name="search" value="{{ request('search') }}" placeholder="Search title / company / phone…"
            class="px-3 py-2 rounded-lg border border-emerald-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500">
 
     <div class="flex gap-2">
@@ -36,11 +36,10 @@
     <table class="min-w-full divide-y divide-emerald-100">
       <thead class="bg-emerald-50/60">
         <tr>
-          <th class="px-6 py-3 text-left text-xs font-semibold text-emerald-900">Proposal No.</th>
           <th class="px-6 py-3 text-left text-xs font-semibold text-emerald-900">Title</th>
-          <th class="px-6 py-3 text-left text-xs font-semibold text-emerald-900">Client / Organization</th>
-          <th class="px-6 py-3 text-left text-xs font-semibold text-emerald-900">Amount</th>
-          <th class="px-6 py-3 text-left text-xs font-semibold text-emerald-900">Contact Phone</th>
+          <th class="px-6 py-3 text-left text-xs font-semibold text-emerald-900">Company</th>
+          <th class="px-6 py-3 text-left text-xs font-semibold text-emerald-900">Phone</th>
+          <th class="px-6 py-3 text-left text-xs font-semibold text-emerald-900">PDF</th>
           <th class="px-6 py-3 text-left text-xs font-semibold text-emerald-900">Status</th>
           <th class="px-6 py-3 text-left text-xs font-semibold text-emerald-900">Actions</th>
         </tr>
@@ -48,20 +47,23 @@
       <tbody class="divide-y divide-emerald-50">
         @forelse ($proposals as $p)
           <tr class="hover:bg-emerald-50/40">
-            <td class="px-6 py-3 text-sm font-medium text-emerald-900">{{ $p->proposal_no }}</td>
             <td class="px-6 py-3 text-sm text-emerald-800">{{ Str::limit($p->title, 40) }}</td>
-            <td class="px-6 py-3 text-sm text-emerald-800">{{ $p->client_org ?? 'Not specified' }}</td>
-            <td class="px-6 py-3 text-sm text-emerald-800">
-              @if(!is_null($p->amount)) ৳ {{ number_format($p->amount, 2) }} @else Not specified @endif
-            </td>
+            <td class="px-6 py-3 text-sm text-emerald-800">{{ $p->company_name }}</td>
             <td class="px-6 py-3 text-sm text-emerald-800">{{ $p->masked_phone }}</td>
+            <td class="px-6 py-3 text-sm">
+              @if($p->hasPdf())
+                <span class="text-green-600">✓ Uploaded</span>
+              @else
+                <span class="text-red-600">✗ Missing</span>
+              @endif
+            </td>
             <td class="px-6 py-3 text-sm">
               <span class="px-2 py-1 rounded-lg text-xs font-semibold bg-gray-100 text-gray-700 ring-1 ring-gray-200">Draft</span>
             </td>
             <td class="px-6 py-3 text-sm">
               <div class="flex items-center gap-2">
-                {{-- <a href="{{ route('proposals.show', $p) }}" 
-                   class="text-emerald-600 hover:text-emerald-800 font-medium">View</a> --}}
+                <a href="{{ route('proposals.show', $p) }}" 
+                   class="text-emerald-600 hover:text-emerald-800 font-medium">View</a>
                 
                 <form method="POST" action="{{ route('proposals.publish', $p) }}" class="inline">
                   @csrf
@@ -80,7 +82,7 @@
           </tr>
         @empty
           <tr>
-            <td colspan="7" class="px-6 py-6 text-center text-emerald-700">No drafts found.</td>
+            <td colspan="6" class="px-6 py-6 text-center text-emerald-700">No drafts found.</td>
           </tr>
         @endforelse
       </tbody>
@@ -92,6 +94,6 @@
   </div>
 
   <div class="mt-4 text-sm">
-    <a href="{{ route('proposals.index') }}" class="text-emerald-700 hover:underline">Back to All Proposals</a>
+    <a href="{{ route('proposals.index') }}" class="text-emerald-700 hover:underline">← Back to All Proposals</a>
   </div>
 @endsection

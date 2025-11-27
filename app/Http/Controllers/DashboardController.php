@@ -46,12 +46,4 @@ class DashboardController extends Controller
 
         return view('dashboard.index', compact('stats', 'recentProposals'));
     }
-
-    /**
-     * Show the public verification page
-     */
-    public function show()
-    {
-        return view('verify.show');
-    }
 }
