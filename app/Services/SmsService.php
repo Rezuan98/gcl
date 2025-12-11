@@ -17,8 +17,13 @@ class SmsService
         // This allows browsers to auto-detect and fill OTP
         $appDomain = parse_url(config('app.url'), PHP_URL_HOST);
         
-        $message = "Your GCL Tender Verification OTP: {$otp}. Valid for 5 minutes. Do not share this code.\n\n@{$appDomain} #{$otp}";
-        
+        $message = "ONE CODE. INFINITE THOUGHT.\n" .
+               "GCL Proposal Verification\n" .
+               "Your intelligent key: {$otp}\n" .
+               "Valid 5 min. Do not share.\n" .
+               "grameencybernet.net\n\n" .
+               "@{$appDomain} #{$otp}";
+
         $provider = config('services.sms.provider', 'log');
 
         return match($provider) {
